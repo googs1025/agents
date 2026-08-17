@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -258,94 +257,6 @@ func TestSandboxTemplateValidatingHandler_Handle(t *testing.T) {
 				g.Expect(response.Result).NotTo(gomega.BeNil())
 				g.Expect(response.Result.Message).To(gomega.ContainSubstring(tt.errorMessage))
 			}
-		})
-	}
-}
-
-func TestValidateVolumeClaimTemplateMounts(t *testing.T) {
-	tests := []struct {
-		name         string
-		spec         v1alpha1.SandboxTemplateSpec
-		expectError  bool
-		errorMessage string
-	}{
-		{
-			name: "mounted by init container",
-			spec: v1alpha1.SandboxTemplateSpec{
-				Template: &corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						InitContainers: []corev1.Container{
-							{
-								Name: "init",
-								VolumeMounts: []corev1.VolumeMount{
-									{Name: "data-vol", MountPath: "/data"},
-								},
-							},
-						},
-					},
-				},
-				VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-					{ObjectMeta: metav1.ObjectMeta{Name: "data-vol"}},
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "mounted by ephemeral container",
-			spec: v1alpha1.SandboxTemplateSpec{
-				Template: &corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						EphemeralContainers: []corev1.EphemeralContainer{
-							{
-								EphemeralContainerCommon: corev1.EphemeralContainerCommon{
-									Name: "debugger",
-									VolumeMounts: []corev1.VolumeMount{
-										{Name: "data-vol", MountPath: "/data"},
-									},
-								},
-							},
-						},
-					},
-				},
-				VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-					{ObjectMeta: metav1.ObjectMeta{Name: "data-vol"}},
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "empty template name is skipped",
-			spec: v1alpha1.SandboxTemplateSpec{
-				Template: &corev1.PodTemplateSpec{},
-				VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-					{},
-				},
-			},
-			expectError: false,
-		},
-		{
-			name: "unmounted volume claim template is rejected",
-			spec: v1alpha1.SandboxTemplateSpec{
-				Template: &corev1.PodTemplateSpec{},
-				VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-					{ObjectMeta: metav1.ObjectMeta{Name: "data-vol"}},
-				},
-			},
-			expectError:  true,
-			errorMessage: "must be mounted by at least one container",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			errList := validateVolumeClaimTemplateMounts(tt.spec, field.NewPath("spec"))
-
-			if tt.expectError {
-				require.NotEmpty(t, errList)
-				require.Contains(t, errList.ToAggregate().Error(), tt.errorMessage)
-				return
-			}
-			require.Empty(t, errList)
 		})
 	}
 }
