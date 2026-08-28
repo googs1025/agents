@@ -269,10 +269,14 @@ func TestCommonControl_EnsureClaimClaiming(t *testing.T) {
 			checkStatus: func(t *testing.T, status *agentsv1alpha1.SandboxClaimStatus) {
 				assert.Equal(t, agentsv1alpha1.SandboxClaimPhaseCompleted, status.Phase)
 				assert.Contains(t, status.Message, agentsv1alpha1.LabelSandboxID)
+				// User-facing message must show the validation reason,
+				// not the internal claim-options wrapping.
+				assert.NotContains(t, status.Message, "failed to build claim options")
 				condition := GetClaimCondition(status, string(agentsv1alpha1.SandboxClaimConditionCompleted))
 				require.NotNil(t, condition)
 				assert.Equal(t, "InvalidClaimSpec", condition.Reason)
 				assert.Contains(t, condition.Message, agentsv1alpha1.LabelSandboxID)
+				assert.NotContains(t, condition.Message, "failed to build claim options")
 			},
 		},
 		{

@@ -155,7 +155,12 @@ func (c *commonControl) EnsureClaimClaiming(ctx context.Context, args ClaimArgs)
 	claimed, err := c.claimSandboxes(ctx, claim, sandboxSet, batchSize)
 	if err != nil {
 		if errors.Is(err, ErrInvalidClaimSpec) {
+			// Strip the generic "failed to build claim options" wrapper so users
+			// see the actual validation reason in status and events.
 			msg := err.Error()
+			if inner := errors.Unwrap(err); inner != nil {
+				msg = inner.Error()
+			}
 			log.Info("Invalid SandboxClaim spec, completing claim without retry", "err", err)
 			c.recorder.Event(claim, "Warning", "InvalidClaimSpec", msg)
 			TransitionToCompleted(args.NewStatus, "InvalidClaimSpec", msg)
