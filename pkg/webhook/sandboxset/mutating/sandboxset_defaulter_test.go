@@ -599,10 +599,10 @@ func TestSetDefaultPersistentContents(t *testing.T) {
 		errorMsg string
 	}{
 		{
-			name:     "valid single content - ip",
+			name:     "invalid single content - ip",
 			contents: "ip",
-			wantErr:  false,
-			expected: []string{"ip"},
+			wantErr:  true,
+			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
 		},
 		{
 			name:     "valid single content - filesystem",
@@ -617,34 +617,34 @@ func TestSetDefaultPersistentContents(t *testing.T) {
 			expected: []string{"memory"},
 		},
 		{
-			name:     "valid multiple contents - ip,filesystem",
+			name:     "invalid multiple contents - ip,filesystem",
 			contents: "ip,filesystem",
-			wantErr:  false,
-			expected: []string{"ip", "filesystem"},
+			wantErr:  true,
+			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
 		},
 		{
-			name:     "valid multiple contents - ip,memory",
+			name:     "invalid multiple contents - ip,memory",
 			contents: "ip,memory",
-			wantErr:  false,
-			expected: []string{"ip", "memory"},
+			wantErr:  true,
+			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
 		},
 		{
-			name:     "valid all three contents",
+			name:     "invalid all three contents",
 			contents: "ip,filesystem,memory",
-			wantErr:  false,
-			expected: []string{"ip", "filesystem", "memory"},
+			wantErr:  true,
+			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
 		},
 		{
 			name:     "invalid content - unknown",
 			contents: "unknown",
 			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports three contents: ip, memory, and filesystem",
+			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
 		},
 		{
 			name:     "invalid mixed contents - ip,invalid,filesystem",
 			contents: "ip,invalid,filesystem",
 			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports three contents: ip, memory, and filesystem",
+			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
 		},
 		{
 			name:     "empty string - should be allowed (no defaults)",
@@ -656,7 +656,7 @@ func TestSetDefaultPersistentContents(t *testing.T) {
 			name:     "invalid content with spaces",
 			contents: "ip, filesystem",
 			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports three contents: ip, memory, and filesystem",
+			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
 		},
 	}
 
@@ -733,11 +733,11 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 					PersistentContents: []string{}, // Empty
 				},
 			},
-			defaultPersistentContent: "ip,filesystem",
+			defaultPersistentContent: "memory,filesystem",
 			operation:                admissionv1.Create,
 			expectAllow:              true,
 			expectPatch:              true,
-			expectedContents:         []string{"ip", "filesystem"},
+			expectedContents:         []string{"memory", "filesystem"},
 		},
 		{
 			name: "Create with nil PersistentContents and default set - should apply defaults",
@@ -790,14 +790,14 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 							},
 						},
 					},
-					PersistentContents: []string{"ip"}, // Already set
+					PersistentContents: []string{"memory"}, // Already set
 				},
 			},
-			defaultPersistentContent: "ip,filesystem,memory",
+			defaultPersistentContent: "filesystem,memory",
 			operation:                admissionv1.Create,
 			expectAllow:              true,
-			expectPatch:              true,           // Still patch for AutomountServiceAccountToken
-			expectedContents:         []string{"ip"}, // Should remain unchanged
+			expectPatch:              true,               // Still patch for AutomountServiceAccountToken
+			expectedContents:         []string{"memory"}, // Should remain unchanged
 		},
 		{
 			name: "Update operation with empty PersistentContents - should not apply defaults",
@@ -823,7 +823,7 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 					PersistentContents: []string{}, // Empty
 				},
 			},
-			defaultPersistentContent: "ip,filesystem",
+			defaultPersistentContent: "memory,filesystem",
 			operation:                admissionv1.Update,
 			expectAllow:              true,
 			expectPatch:              true,       // Patch for AutomountServiceAccountToken
