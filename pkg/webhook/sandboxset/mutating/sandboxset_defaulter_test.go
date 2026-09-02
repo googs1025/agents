@@ -591,6 +591,8 @@ func deepCopyPodTemplateSpec(template *corev1.PodTemplateSpec) *corev1.PodTempla
 }
 
 func TestSetDefaultPersistentContents(t *testing.T) {
+	const invalidContentsErr = "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem"
+
 	tests := []struct {
 		name     string
 		contents string
@@ -602,7 +604,7 @@ func TestSetDefaultPersistentContents(t *testing.T) {
 			name:     "invalid single content - ip",
 			contents: "ip",
 			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
+			errorMsg: invalidContentsErr,
 		},
 		{
 			name:     "valid single content - filesystem",
@@ -617,34 +619,22 @@ func TestSetDefaultPersistentContents(t *testing.T) {
 			expected: []string{"memory"},
 		},
 		{
-			name:     "invalid multiple contents - ip,filesystem",
+			name:     "valid multiple contents",
+			contents: "memory,filesystem",
+			wantErr:  false,
+			expected: []string{"memory", "filesystem"},
+		},
+		{
+			name:     "invalid mixed contents - ip,filesystem",
 			contents: "ip,filesystem",
 			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
-		},
-		{
-			name:     "invalid multiple contents - ip,memory",
-			contents: "ip,memory",
-			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
-		},
-		{
-			name:     "invalid all three contents",
-			contents: "ip,filesystem,memory",
-			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
+			errorMsg: invalidContentsErr,
 		},
 		{
 			name:     "invalid content - unknown",
 			contents: "unknown",
 			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
-		},
-		{
-			name:     "invalid mixed contents - ip,invalid,filesystem",
-			contents: "ip,invalid,filesystem",
-			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
+			errorMsg: invalidContentsErr,
 		},
 		{
 			name:     "empty string - should be allowed (no defaults)",
@@ -654,9 +644,9 @@ func TestSetDefaultPersistentContents(t *testing.T) {
 		},
 		{
 			name:     "invalid content with spaces",
-			contents: "ip, filesystem",
+			contents: "memory, filesystem",
 			wantErr:  true,
-			errorMsg: "default-sandboxset-persistent-contents is invalid and only supports two contents: memory and filesystem",
+			errorMsg: invalidContentsErr,
 		},
 	}
 
@@ -696,6 +686,31 @@ func TestSetDefaultPersistentContents(t *testing.T) {
 	}
 }
 
+func newPersistentContentsSandboxSet(contents []string) *v1alpha1.SandboxSet {
+	return &v1alpha1.SandboxSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-sbs",
+			Namespace: "default",
+		},
+		Spec: v1alpha1.SandboxSetSpec{
+			Replicas: 3,
+			EmbeddedSandboxTemplate: v1alpha1.EmbeddedSandboxTemplate{
+				Template: &corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "test-container",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+			PersistentContents: contents,
+		},
+	}
+}
+
 func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 	err := v1alpha1.AddToScheme(scheme.Scheme)
 	require.NoError(t, err)
@@ -710,29 +725,8 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 		expectedContents         []string
 	}{
 		{
-			name: "Create with empty PersistentContents and default set - should apply defaults",
-			sandboxSet: &v1alpha1.SandboxSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sbs",
-					Namespace: "default",
-				},
-				Spec: v1alpha1.SandboxSetSpec{
-					Replicas: 3,
-					EmbeddedSandboxTemplate: v1alpha1.EmbeddedSandboxTemplate{
-						Template: &corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test-container",
-										Image: "nginx:latest",
-									},
-								},
-							},
-						},
-					},
-					PersistentContents: []string{}, // Empty
-				},
-			},
+			name:                     "Create with empty PersistentContents and default set - should apply defaults",
+			sandboxSet:               newPersistentContentsSandboxSet([]string{}),
 			defaultPersistentContent: "memory,filesystem",
 			operation:                admissionv1.Create,
 			expectAllow:              true,
@@ -740,29 +734,8 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 			expectedContents:         []string{"memory", "filesystem"},
 		},
 		{
-			name: "Create with nil PersistentContents and default set - should apply defaults",
-			sandboxSet: &v1alpha1.SandboxSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sbs",
-					Namespace: "default",
-				},
-				Spec: v1alpha1.SandboxSetSpec{
-					Replicas: 3,
-					EmbeddedSandboxTemplate: v1alpha1.EmbeddedSandboxTemplate{
-						Template: &corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test-container",
-										Image: "nginx:latest",
-									},
-								},
-							},
-						},
-					},
-					PersistentContents: nil, // Nil
-				},
-			},
+			name:                     "Create with nil PersistentContents and default set - should apply defaults",
+			sandboxSet:               newPersistentContentsSandboxSet(nil),
 			defaultPersistentContent: "memory",
 			operation:                admissionv1.Create,
 			expectAllow:              true,
@@ -770,29 +743,8 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 			expectedContents:         []string{"memory"},
 		},
 		{
-			name: "Create with existing PersistentContents - should not override",
-			sandboxSet: &v1alpha1.SandboxSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sbs",
-					Namespace: "default",
-				},
-				Spec: v1alpha1.SandboxSetSpec{
-					Replicas: 3,
-					EmbeddedSandboxTemplate: v1alpha1.EmbeddedSandboxTemplate{
-						Template: &corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test-container",
-										Image: "nginx:latest",
-									},
-								},
-							},
-						},
-					},
-					PersistentContents: []string{"memory"}, // Already set
-				},
-			},
+			name:                     "Create with existing PersistentContents - should not override",
+			sandboxSet:               newPersistentContentsSandboxSet([]string{"memory"}),
 			defaultPersistentContent: "filesystem,memory",
 			operation:                admissionv1.Create,
 			expectAllow:              true,
@@ -800,29 +752,8 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 			expectedContents:         []string{"memory"}, // Should remain unchanged
 		},
 		{
-			name: "Update operation with empty PersistentContents - should not apply defaults",
-			sandboxSet: &v1alpha1.SandboxSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sbs",
-					Namespace: "default",
-				},
-				Spec: v1alpha1.SandboxSetSpec{
-					Replicas: 3,
-					EmbeddedSandboxTemplate: v1alpha1.EmbeddedSandboxTemplate{
-						Template: &corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test-container",
-										Image: "nginx:latest",
-									},
-								},
-							},
-						},
-					},
-					PersistentContents: []string{}, // Empty
-				},
-			},
+			name:                     "Update operation with empty PersistentContents - should not apply defaults",
+			sandboxSet:               newPersistentContentsSandboxSet([]string{}),
 			defaultPersistentContent: "memory,filesystem",
 			operation:                admissionv1.Update,
 			expectAllow:              true,
@@ -830,29 +761,8 @@ func TestSandboxSetDefaulter_HandleWithPersistentContents(t *testing.T) {
 			expectedContents:         []string{}, // Should remain empty on Update
 		},
 		{
-			name: "Create with no default set - should not apply defaults",
-			sandboxSet: &v1alpha1.SandboxSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-sbs",
-					Namespace: "default",
-				},
-				Spec: v1alpha1.SandboxSetSpec{
-					Replicas: 3,
-					EmbeddedSandboxTemplate: v1alpha1.EmbeddedSandboxTemplate{
-						Template: &corev1.PodTemplateSpec{
-							Spec: corev1.PodSpec{
-								Containers: []corev1.Container{
-									{
-										Name:  "test-container",
-										Image: "nginx:latest",
-									},
-								},
-							},
-						},
-					},
-					PersistentContents: []string{}, // Empty
-				},
-			},
+			name:                     "Create with no default set - should not apply defaults",
+			sandboxSet:               newPersistentContentsSandboxSet([]string{}),
 			defaultPersistentContent: "", // No default
 			operation:                admissionv1.Create,
 			expectAllow:              true,
