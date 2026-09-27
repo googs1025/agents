@@ -380,6 +380,9 @@ func (r *Reconciler) applyStabilizationWindow(pa *agentsv1alpha1.PoolAutoscaler,
 		window = resolveScaleUpCooldown(pa.Spec.CapacityPolicy, r.sbxMaxPendingTimeout)
 	} else {
 		lastScaleAt = monitor.lastScaleDownAt
+		if monitor.lastScaleUpAt.After(lastScaleAt) {
+			lastScaleAt = monitor.lastScaleUpAt
+		}
 		if pa.Status.LastScaleTime != nil && pa.Status.LastScaleTime.Time.After(lastScaleAt) {
 			lastScaleAt = pa.Status.LastScaleTime.Time
 		}
