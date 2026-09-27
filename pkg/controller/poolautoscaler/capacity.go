@@ -334,8 +334,7 @@ func (r *Reconciler) computeCronDesiredReplicas(ctx context.Context, pa *agentsv
 //
 // This is a cooldown model, NOT a sustained-condition model:
 //   - First scale is immediate (no cooldown).
-//   - Scale-up waits for its resolved window after any scale action.
-//   - Scale-down uses its own cooldown and is not blocked by scale-up limits.
+//   - Both directions wait for their resolved window after any scale action.
 //   - The observation window samples are NOT cleared after scaling.
 //
 // cooldownExpired checks if enough time has elapsed since the last scale action.
@@ -380,9 +379,10 @@ func (r *Reconciler) applyStabilizationWindow(pa *agentsv1alpha1.PoolAutoscaler,
 		}
 		window = resolveScaleUpCooldown(pa.Spec.CapacityPolicy, r.sbxMaxPendingTimeout)
 	} else {
-		// Scale-down has its own stabilization window and is not blocked by the
-		// scale-up cooldown or SandboxSet startup limits.
 		lastScaleAt = monitor.lastScaleDownAt
+		if pa.Status.LastScaleTime != nil && pa.Status.LastScaleTime.Time.After(lastScaleAt) {
+			lastScaleAt = pa.Status.LastScaleTime.Time
+		}
 		window = defaultScaleDownStabilization
 		if pa.Spec.CapacityPolicy != nil && pa.Spec.CapacityPolicy.ScaleDown != nil &&
 			pa.Spec.CapacityPolicy.ScaleDown.StabilizationWindowSeconds != nil {

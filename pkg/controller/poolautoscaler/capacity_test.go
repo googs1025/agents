@@ -1305,15 +1305,14 @@ func TestApplyStabilizationWindow_Cooldown(t *testing.T) {
 			expected: 5,
 		},
 		{
-			name:            "scale down is not blocked by recent scale up",
-			specReplicas:    10,
-			desiredReplicas: 5,
-			scaleUpWindow:   int32Ptr(60),
-			scaleDownWindow: int32Ptr(60),
-			setupMonitor: func(m *capacityMonitor) {
-				m.lastScaleUpAt = time.Now().Add(-10 * time.Second)
-			},
-			expected: 5,
+			name:             "scale down blocked by persisted LastScaleTime",
+			specReplicas:     10,
+			desiredReplicas:  5,
+			scaleUpWindow:    int32Ptr(60),
+			scaleDownWindow:  int32Ptr(60),
+			setupMonitor:     func(m *capacityMonitor) {},
+			lastScaleTimeAgo: 10 * time.Second,
+			expected:         10,
 		},
 		{
 			name:            "dead zone - no scaling",
